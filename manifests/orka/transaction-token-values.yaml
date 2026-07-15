@@ -1,0 +1,13 @@
+controller:
+  contextToken:
+    profile: transaction-token
+    issuer: https://kontxt.example.test
+    audience: orka
+    headers: Txn-Token
+    authzMode: enforce
+    tts:
+      endpoint: http://kontxt-tts.default.svc.cluster.local:8080/token_endpoint
+      audience: orka
+      tokenSource: incoming
+      childScope: orka:agents:run
+      outboundScope: orka:tools:http

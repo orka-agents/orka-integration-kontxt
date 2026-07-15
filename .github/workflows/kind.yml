@@ -1,0 +1,28 @@
+name: kind
+on:
+  workflow_dispatch:
+    inputs:
+      orka_ref:
+        description: Exact Orka branch, tag, or commit
+        default: main
+        required: true
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  scaffold:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Install kind
+        run: |
+          curl -fsSLo /tmp/kind https://kind.sigs.k8s.io/dl/v0.29.0/kind-linux-amd64
+          echo 'b6c6c3f3c4edb464a7f1cb3bdf38a4f9b80cdd77f0dbf013491021c7b67d3d32  /tmp/kind' | sha256sum -c -
+          sudo install /tmp/kind /usr/local/bin/kind
+      - name: Install Helm
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      - name: Install candidate Orka chart
+        env:
+          ORKA_REF: ${{ inputs.orka_ref || 'main' }}
+        run: scripts/kind-ci.sh
