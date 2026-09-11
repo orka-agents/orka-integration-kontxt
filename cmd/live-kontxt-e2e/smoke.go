@@ -270,7 +270,25 @@ func (s *smokeClient) run(ctx context.Context, subject string) (runErr error) {
 		}
 		switch task.Status.Phase {
 		case "Succeeded":
-			return nil
+			listed, err := s.request(ctx, http.MethodGet, s.taskURL("")+"&limit=0", root, "", nil, http.StatusOK)
+			if err != nil {
+				return fmt.Errorf("completed Task list: %w", err)
+			}
+			if err := s.checkRedaction(listed.body); err != nil {
+				return err
+			}
+			var list struct {
+				Items []smokeTask `json:"items"`
+			}
+			if json.Unmarshal(listed.body, &list) != nil {
+				return errors.New("Task list response is invalid JSON")
+			}
+			if slices.ContainsFunc(list.Items, func(item smokeTask) bool {
+				return item.Metadata.Name == name && item.Metadata.Namespace == s.opts.namespace &&
+					item.Spec.Transaction.ID == rootClaims.TransactionID
+			}) {
+				return nil
+			}
 		case "Failed", "Cancelled":
 			return errors.New("test Task failed or was cancelled")
 		case "", "Pending", "Running", "Finalizing":

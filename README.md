@@ -42,7 +42,7 @@ Install these tools first:
 | [Helm](https://helm.sh/docs/v3/intro/install/) v3.22.0 | Installs Orka using its packaged Kubernetes configuration, called a chart. |
 | Git, Bash, curl, jq, OpenSSL | Download source, run the script, process configuration, and generate temporary test keys. |
 
-The version pins are in [versions.env](versions.env). The test cluster uses Kubernetes v1.36.4. Docker builds the Go binaries and Orka UI.
+Tool and cluster versions are pinned in [versions.env](versions.env). The test cluster uses Kubernetes v1.36.4. Kontxt's library version is set in [go.mod](go.mod). Docker builds the Go binaries and Orka UI.
 
 Start Docker and check that `docker info` succeeds. Then clone this repository and run the test:
 
@@ -75,7 +75,7 @@ The commit identifies the Orka version tested. If a check fails, the script exit
 | Check | Expected behavior |
 |---|---|
 | Identity exchange | A valid Kubernetes ServiceAccount token can be exchanged for a signed Kontxt token. |
-| API permissions | Listing Tasks succeeds with the required scope. Requests without a token get `401`; missing permissions or the wrong namespace get `403`. |
+| API permissions | The created Task appears in an authorized list. Requests without a token get `401`; missing permissions or the wrong namespace get `403`. |
 | Task execution | A container Task confirms its transaction ID matches the issued token, finishes successfully, and is deleted. Task responses must not contain raw tokens or private request context. |
 | Reduced permissions | A replacement token can have fewer permissions while keeping the same transaction ID. Asking for broader permissions is rejected. |
 | Verification by another service | A second test service accepts the restricted token and confirms its transaction ID and scope. |

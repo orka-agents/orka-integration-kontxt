@@ -1,6 +1,6 @@
 # Contributing
 
-Keep provider installation and policy in this repository, using Orka's generic `transaction-token` contract. Update version pins in [versions.env](versions.env) and record verification against an exact Orka commit in [docs/compatibility.md](docs/compatibility.md).
+Keep provider installation and policy in this repository, using Orka's generic `transaction-token` contract. Update tool and cluster pins in [versions.env](versions.env) and the Kontxt library dependency in [go.mod](go.mod). Record verification against an exact Orka commit in [docs/compatibility.md](docs/compatibility.md).
 
 With Go matching [go.mod](go.mod) installed, run these checks before submitting a change:
 

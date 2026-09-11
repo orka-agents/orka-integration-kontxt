@@ -8,7 +8,7 @@ Compatibility applies to an Orka source revision, chart, and images tested toget
 
 The complete runner passed on a fresh ARM64 kind cluster with Helm v3.22.0. It built the controller and publisher from the local Orka checkout at the commit above and used no model credentials.
 
-The pins are in [versions.env](../versions.env). The [smoke test](../scripts/kind-ci.sh) uses `manifest_staging/charts/orka` from the selected Orka checkout and builds its controller and workspace publisher by default.
+Tool and cluster versions are pinned in [versions.env](../versions.env); the Kontxt library is pinned in [go.mod](../go.mod). The [smoke test](../scripts/kind-ci.sh) uses `manifest_staging/charts/orka` from the selected Orka checkout and builds its controller and workspace publisher by default.
 
 ## Smoke coverage
 

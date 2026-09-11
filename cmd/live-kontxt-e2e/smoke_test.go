@@ -31,22 +31,26 @@ import (
 )
 
 func TestSmokeAgainstKontxt(t *testing.T) {
-	fixture := newSmokeFixture(t, "")
-	client := newSmokeClient(fixture.opts)
-	ctx, cancel := context.WithTimeout(context.Background(), fixture.opts.timeout)
-	defer cancel()
-	if err := client.run(ctx, fixture.subject); err != nil {
-		t.Fatal(err)
-	}
-	fixture.mu.Lock()
-	defer fixture.mu.Unlock()
-	for _, check := range []string{"access_token", "replacement", "unauthenticated", "allowed-list", "missing-scope", "wrong-namespace", "downstream", "create", "poll", "delete", "absent"} {
-		if fixture.observed[check] == 0 {
-			t.Errorf("missing smoke check %s", check)
-		}
-	}
-	if fixture.exists {
-		t.Fatal("test Task still exists after cleanup")
+	for _, fault := range []string{"", "list-delay"} {
+		t.Run("smoke"+fault, func(t *testing.T) {
+			fixture := newSmokeFixture(t, fault)
+			client := newSmokeClient(fixture.opts)
+			ctx, cancel := context.WithTimeout(context.Background(), fixture.opts.timeout)
+			defer cancel()
+			if err := client.run(ctx, fixture.subject); err != nil {
+				t.Fatal(err)
+			}
+			fixture.mu.Lock()
+			defer fixture.mu.Unlock()
+			for _, check := range []string{"access_token", "replacement", "unauthenticated", "allowed-list", "missing-scope", "wrong-namespace", "downstream", "create", "poll", "listed-task", "delete", "absent"} {
+				if fixture.observed[check] == 0 {
+					t.Errorf("missing smoke check %s", check)
+				}
+			}
+			if fixture.exists {
+				t.Fatal("test Task still exists after cleanup")
+			}
+		})
 	}
 }
 
@@ -60,8 +64,10 @@ func TestSmokeFailuresAndCleanup(t *testing.T) {
 		{"replacement-identity", "replacement token changed", false},
 		{"broaden-allowed", "scope broadening rejection", false},
 		{"downstream-identity", "downstream verification", false},
-		{"list-tctx-leak", "private context", false},
-		{"list-rctx-leak", "private context", false},
+		{"list-tctx-leak", "private context", true},
+		{"list-rctx-leak", "private context", true},
+		{"list-json", "Task list response is invalid JSON", true},
+		{"list-absent", "context deadline exceeded", true},
 		{"create-conflict", "test Task create", false},
 		{"create-disconnect", "test Task create", true},
 		{"create-disconnect-absent", "test Task create", false},
@@ -283,7 +289,7 @@ func newSmokeFixture(t *testing.T, fault string) *smokeFixture {
 		subject:  "eyJhbGciOiJSUzI1NiJ9." + base64.RawURLEncoding.EncodeToString([]byte(`{"iss":"https://subject.example.test"}`)) + ".synthetic-signature",
 		observed: map[string]int{},
 	}
-	if fault == "poll-timeout" {
+	if fault == "poll-timeout" || fault == "list-absent" {
 		fixture.opts.timeout = 500 * time.Millisecond
 	}
 	verifier := sdkverify.New(fixture.opts.jwksURL, fixture.opts.audience)
@@ -400,11 +406,27 @@ func newSmokeFixture(t *testing.T, fault string) *smokeFixture {
 		switch {
 		case r.Method == http.MethodGet && name == "":
 			fixture.observed["allowed-list"]++
-			if fault == "list-tctx-leak" || fault == "list-rctx-leak" {
-				task := fixtureTask("previous-task", fixture.opts.namespace, claims)
-				_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{fixtureTaskWithContext(task, claims, strings.Split(fault, "-")[1])}})
-			} else {
+			if !fixture.exists {
 				_, _ = io.WriteString(w, `{"items":[]}`)
+				return
+			}
+			fixture.observed["list-after-create"]++
+			if r.URL.Query().Get("limit") != "0" {
+				t.Error("created Task list must not omit the test Task through pagination")
+			}
+			if fault == "list-absent" || (fault == "list-delay" && fixture.observed["list-after-create"] == 1) {
+				_, _ = io.WriteString(w, `{"items":[]}`)
+				return
+			}
+			if fault == "list-json" {
+				_, _ = io.WriteString(w, testPrivateContext)
+				return
+			}
+			fixture.observed["listed-task"]++
+			if fault == "list-tctx-leak" || fault == "list-rctx-leak" {
+				_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{fixtureTaskWithContext(fixture.task, claims, strings.Split(fault, "-")[1])}})
+			} else {
+				_ = json.NewEncoder(w).Encode(map[string]any{"items": []smokeTask{fixture.task}})
 			}
 		case r.Method == http.MethodPost && name == "":
 			var req struct {
