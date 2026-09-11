@@ -177,7 +177,6 @@ func newRunner(t *testing.T) *runner {
 	}
 	writeFile(t, r.env["KUBECONFIG"], "inherited config must stay untouched\n")
 	writeFile(t, filepath.Join(r.source, "manifest_staging/charts/orka/Chart.yaml"), "apiVersion: v2\nname: orka\nversion: 0.0.1\n")
-	writeFile(t, filepath.Join(r.source, "charts/orka/Chart.yaml"), "legacy chart\n")
 	writeFile(t, filepath.Join(r.source, "revision"), "main")
 	writeFile(t, filepath.Join(r.source, "scripts/lib/kind-local-registry.sh"), `orka_kind_registry_start() {
   export ORKA_KIND_REGISTRY_NAME="registry-$1"

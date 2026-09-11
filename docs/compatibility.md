@@ -8,7 +8,7 @@ Compatibility applies to an Orka source revision, chart, and images tested toget
 
 The complete runner passed on a fresh ARM64 kind cluster with Helm v3.22.0. It built the controller and publisher from the local Orka checkout at the commit above and used no model credentials.
 
-The pins are in [versions.env](../versions.env). The [active smoke test](../scripts/kind-ci.sh) uses `manifest_staging/charts/orka` from the selected Orka checkout and builds its controller and workspace publisher by default. The released `charts/orka` directory can lag current source and is not the default for testing `main`.
+The pins are in [versions.env](../versions.env). The [smoke test](../scripts/kind-ci.sh) uses `manifest_staging/charts/orka` from the selected Orka checkout and builds its controller and workspace publisher by default.
 
 ## Smoke coverage
 
@@ -35,7 +35,3 @@ It does not validate model execution, GitHub Actions OIDC, Orka's internal `dele
 | `KEEP_CLUSTER` | Set to `1` to keep a script-created cluster, registry, and run directory after the run. |
 
 Controller and publisher image overrides must be compatible with the selected chart and source. An image tag alone does not establish that compatibility. See the [local checkout example](../README.md#use-a-local-orka-checkout) for kindctl usage and cleanup.
-
-## Archived assets
-
-The scripts in [legacy/](../legacy/README.md) retain the pre-extraction Orka layout and configuration. They require missing helpers and use settings removed from current Orka. Follow the [migration notes](legacy-quickstart.md) instead of executing them.

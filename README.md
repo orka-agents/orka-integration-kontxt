@@ -42,5 +42,3 @@ kindctl delete --tag kontxt-main
 After deleting the cluster, also delete the registry container and run directory named in the script's final output. The run directory includes temporary test keys.
 
 For another installation, follow [current provider configuration](docs/provider-notes.md) and the [sample Helm values](manifests/orka/transaction-token-values.yaml). Orka requires `profile: transaction-token` and an exact TTS endpoint ending in `/token_endpoint` for Kontxt.
-
-The [legacy scripts](legacy/README.md) and [old quickstart](docs/legacy-quickstart.md) are archived migration material. They are not runnable entrypoints for current Orka.

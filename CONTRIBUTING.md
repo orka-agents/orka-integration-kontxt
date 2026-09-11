@@ -6,7 +6,7 @@ With Go matching [go.mod](go.mod) installed, run these checks before submitting 
 
 ```bash
 go test ./...
-for kontxt_script in scripts/*.sh legacy/*.sh legacy/demo/*.sh; do
+for kontxt_script in scripts/*.sh; do
   bash -n "$kontxt_script"
 done
 ./scripts/check-redaction.sh
@@ -14,4 +14,4 @@ done
 
 For changes to deployment or token behavior, also run the [kind smoke test](README.md#run-the-smoke-test). Use a private kubeconfig or the documented kindctl workflow. A passing fixture test alone does not establish compatibility with a deployed controller.
 
-Use synthetic test identities. Never commit tokens, private keys, kubeconfigs, generated binaries, or live endpoint credentials. Keep the scripts in `legacy/` archived; implement current behavior in the active entrypoint and helper.
+Use synthetic test identities. Never commit tokens, private keys, kubeconfigs, generated binaries, or live endpoint credentials.

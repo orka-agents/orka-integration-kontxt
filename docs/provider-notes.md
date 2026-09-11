@@ -58,7 +58,7 @@ controller:
       tokenSource: incoming
 ```
 
-Orka sends requests to the configured endpoint without appending a path. The former `ORKA_CONTEXT_TOKEN_TTS_URL`, `--context-token-tts-url`, and `controller.contextToken.tts.url` settings have no compatibility aliases.
+Orka sends requests to the configured endpoint without appending a path.
 
 Configure requested child and outbound scopes through `ORKA_CONTEXT_TOKEN_CHILD_SCOPE` and `ORKA_CONTEXT_TOKEN_OUTBOUND_SCOPE`. Child scopes must be a subset of the parent transaction scopes. Orka stores delegated raw tokens in owner-referenced Secrets; Tasks contain the Secret reference and safe transaction metadata. Replacement uses RFC 8693 and requires the response to contain the transaction `issued_token_type` and `token_type=N_A`.
 
@@ -72,4 +72,4 @@ The disposable kind setup mounts the cluster CA into Kontxt and grants unauthent
 
 Tasks created through the authenticated REST API receive verified `spec.requestedBy` and `spec.transaction` fields. Transaction metadata uses `profile: transaction-token`, a transaction ID, and safe context digests. The controller propagates the metadata to container Jobs, Pods, and worker environment variables such as `ORKA_TRANSACTION_ID` and `ORKA_TRANSACTION_PROFILE`. Raw TxTokens must stay out of Task specs/status and logs.
 
-See [compatibility and verification status](compatibility.md) and the [archived configuration migration](legacy-quickstart.md).
+See [compatibility and verification status](compatibility.md).
