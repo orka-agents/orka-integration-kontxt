@@ -4,7 +4,7 @@ WORKDIR /workspace
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -a -o /live-kontxt-e2e ./scripts/live-kontxt-e2e
+RUN CGO_ENABLED=0 GOOS=linux go build -o /live-kontxt-e2e ./cmd/live-kontxt-e2e
 
 FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=builder /live-kontxt-e2e /live-kontxt-e2e

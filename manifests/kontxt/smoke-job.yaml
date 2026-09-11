@@ -1,0 +1,57 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kontxt-smoke
+spec:
+  backoffLimit: 0
+  # 5m smoke + 30s Task cleanup + 2m scheduling and startup.
+  activeDeadlineSeconds: 450
+  template:
+    spec:
+      serviceAccountName: kontxt-caller
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: smoke
+          image: kontxt-e2e:local
+          args:
+            - smoke
+            - --tts-endpoint=http://kontxt-tts.orka-system.svc.cluster.local:8080/token_endpoint
+            - --jwks-url=http://kontxt-tts.orka-system.svc.cluster.local:8080/.well-known/jwks.json
+            - --orka-url=http://orka.orka-system.svc.cluster.local:8080
+            - --namespace=orka-system
+            - --subject-token-file=/var/run/kontxt/token
+            - --task-image=$(TASK_IMAGE)
+            - --downstream-url=http://kontxt-tts.orka-system.svc.cluster.local:8081/verify
+            - --timeout=5m
+          env:
+            - name: TASK_IMAGE
+              value: kontxt-e2e:local
+          volumeMounts:
+            - name: subject-token
+              mountPath: /var/run/kontxt
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+      volumes:
+        - name: subject-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  audience: kontxt
+                  expirationSeconds: 600
+                  path: token

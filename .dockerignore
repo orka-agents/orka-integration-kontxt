@@ -1,0 +1,7 @@
+**
+!go.mod
+!go.sum
+!cmd/
+!cmd/live-kontxt-e2e/
+!cmd/live-kontxt-e2e/*.go
+**/*_test.go
