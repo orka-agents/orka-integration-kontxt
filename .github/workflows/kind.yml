@@ -10,19 +10,27 @@ on:
 permissions:
   contents: read
 jobs:
-  scaffold:
+  integration:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
       - name: Install kind
         run: |
-          curl -fsSLo /tmp/kind https://kind.sigs.k8s.io/dl/v0.29.0/kind-linux-amd64
-          echo 'c72eda46430f065fb45c5f70e7c957cc9209402ef309294821978677c8fb3284  /tmp/kind' | sha256sum -c -
-          sudo install /tmp/kind /usr/local/bin/kind
+          source versions.env
+          curl -fsSLo "${RUNNER_TEMP}/kind" "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          printf '%s  %s\n' "${KIND_LINUX_AMD64_SHA256}" "${RUNNER_TEMP}/kind" | sha256sum -c -
+          sudo install "${RUNNER_TEMP}/kind" /usr/local/bin/kind
       - name: Install Helm
         run: |
-          curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-      - name: Install candidate Orka chart
+          source versions.env
+          curl -fsSLo "${RUNNER_TEMP}/helm.tar.gz" "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz"
+          printf '%s  %s\n' "${HELM_LINUX_AMD64_SHA256}" "${RUNNER_TEMP}/helm.tar.gz" | sha256sum -c -
+          tar -xzf "${RUNNER_TEMP}/helm.tar.gz" -C "${RUNNER_TEMP}" linux-amd64/helm
+          sudo install "${RUNNER_TEMP}/linux-amd64/helm" /usr/local/bin/helm
+      - name: Validate Kontxt against candidate Orka
         env:
           ORKA_REF: ${{ inputs.orka_ref || 'main' }}
         run: scripts/kind-ci.sh

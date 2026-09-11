@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kontxt-tts
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kontxt-tts
+  template:
+    metadata:
+      labels:
+        app: kontxt-tts
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: tts
+          image: kontxt-e2e:local
+          args:
+            - tts-server
+            - --issuer=http://kontxt-tts.orka-system.svc.cluster.local:8080
+            - --trust-domain=orka
+            - --subject-issuer=$(KUBERNETES_ISSUER)
+            - --subject-audience=kontxt
+            - --replacement-jwks-url=http://127.0.0.1:8080/.well-known/jwks.json
+          env:
+            - name: SSL_CERT_FILE
+              value: /var/run/kubernetes-ca/ca.crt
+          ports:
+            - name: tts
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: tts
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: kubernetes-ca
+              mountPath: /var/run/kubernetes-ca
+              readOnly: true
+        - name: downstream
+          image: kontxt-e2e:local
+          args:
+            - downstream-verifier
+            - --jwks-url=http://127.0.0.1:8080/.well-known/jwks.json
+            - --audience=orka
+            - --expect-scope=orka:tools:http
+          ports:
+            - name: downstream
+              containerPort: 8081
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: downstream
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: kubernetes-ca
+          configMap:
+            name: kube-root-ca.crt

@@ -39,6 +39,10 @@ func main() {
 		err = runVerifyToken(os.Args[2:])
 	case "downstream-verifier":
 		err = runDownstreamVerifier(os.Args[2:])
+	case "smoke":
+		err = runSmoke(os.Args[2:])
+	case "check-transaction":
+		err = runCheckTransaction(os.Args[2:])
 	default:
 		usageAndExit(fmt.Sprintf("unknown subcommand %q", os.Args[1]))
 	}
@@ -51,7 +55,7 @@ func main() {
 func usageAndExit(msg string) {
 	_, _ = fmt.Fprintf(
 		os.Stderr,
-		"%s\n\nusage: %s <tts-server|verify-token|downstream-verifier|delegate-child> [flags]\n",
+		"%s\n\nusage: %s <tts-server|verify-token|downstream-verifier|smoke|check-transaction> [flags]\n",
 		msg,
 		os.Args[0],
 	)
@@ -162,12 +166,16 @@ func runVerifyToken(args []string) error {
 		return err
 	}
 	if *expectTxn != "" && claims.TransactionID != *expectTxn {
-		return fmt.Errorf("txn = %q, want %q", claims.TransactionID, *expectTxn)
+		return errors.New("verified transaction ID did not match --expect-txn")
 	}
 	if *expectScope != "" && claims.Scope != *expectScope {
-		return fmt.Errorf("scope = %q, want %q", claims.Scope, *expectScope)
+		return errors.New("verified scope did not match --expect-scope")
 	}
-	return json.NewEncoder(os.Stdout).Encode(claims)
+	return json.NewEncoder(os.Stdout).Encode(map[string]any{
+		"verified": true,
+		"txn":      claims.TransactionID,
+		"scope":    claims.Scope,
+	})
 }
 
 func runDownstreamVerifier(args []string) error {
@@ -257,7 +265,7 @@ func verifyToken(tokenValue, tokenFile, jwksURL, audience string) (*kontxttoken.
 		strings.TrimSpace(audience),
 	).Verify(context.Background(), tokenValue)
 	if err != nil {
-		return nil, fmt.Errorf("verifying TxToken: %w", err)
+		return nil, errors.New("verifying TxToken failed")
 	}
 	return claims, nil
 }

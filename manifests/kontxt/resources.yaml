@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kontxt-caller
+automountServiceAccountToken: false
+---
+# Disposable Kind only: Kontxt discovers the Kubernetes issuer without a bearer
+# token. This role permits GET of issuer metadata and public signing keys only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: orka-kontxt-smoke-issuer-discovery
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:service-account-issuer-discovery
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:unauthenticated
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kontxt-tts
+spec:
+  selector:
+    app: kontxt-tts
+  ports:
+    - name: tts
+      port: 8080
+      targetPort: tts
+    - name: downstream
+      port: 8081
+      targetPort: downstream
