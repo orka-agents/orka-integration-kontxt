@@ -61,6 +61,10 @@ func TestSmokeFailuresAndCleanup(t *testing.T) {
 		{"broaden-allowed", "scope broadening rejection", false},
 		{"downstream-identity", "downstream verification", false},
 		{"create-conflict", "test Task create", false},
+		{"create-disconnect", "test Task create", true},
+		{"create-disconnect-absent", "test Task create", false},
+		{"create-disconnect-identity", "test Task cleanup", false},
+		{"create-server-error", "test Task create", true},
 		{"create-json", "Task response is invalid JSON", true},
 		{"create-leak", "Task JSON contains a raw credential", true},
 		{"get-leak", "Task JSON contains a raw credential", true},
@@ -154,7 +158,7 @@ func TestCheckTransaction(t *testing.T) {
 		wantErr bool
 	}{
 		{"transaction-token", "test-transaction", false},
-		{"kontxt", "test-transaction", true},
+		{"unknown-profile", "test-transaction", true},
 		{"transaction-token", "", true},
 		{"transaction-token", " \n", true},
 	} {
@@ -401,13 +405,26 @@ func newSmokeFixture(t *testing.T, fault string) *smokeFixture {
 				return
 			}
 			fixture.observed["create"]++
-			fixture.exists = true
+			fixture.exists = fault != "create-disconnect-absent"
 			fixture.task = fixtureTask(req.Name, fixture.opts.namespace, claims)
 			if fault == "requester-identity" {
 				fixture.task.Spec.RequestedBy.Subject = testPrivateContext
 			}
-			if fault == "transaction-identity" {
+			if fault == "transaction-identity" || fault == "create-disconnect-identity" {
 				fixture.task.Spec.Transaction.ID = testPrivateContext
+			}
+			if strings.HasPrefix(fault, "create-disconnect") {
+				conn, _, err := w.(http.Hijacker).Hijack()
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				_ = conn.Close()
+				return
+			}
+			if fault == "create-server-error" {
+				w.WriteHeader(http.StatusInternalServerError)
+				return
 			}
 			w.WriteHeader(http.StatusCreated)
 			if fault == "create-json" {

@@ -240,12 +240,13 @@ func (s *smokeClient) run(ctx context.Context, subject string) (runErr error) {
 		return errors.New("encoding the test Task failed")
 	}
 	created, err := s.request(ctx, http.MethodPost, s.taskURL(""), root, "application/json", body, http.StatusCreated)
-	if created.status == http.StatusCreated {
-		// Cleanup also runs for malformed or leaking create responses, and after the run deadline.
+	if created.status == http.StatusCreated || created.status == 0 || created.status >= http.StatusInternalServerError {
+		// A lost response or server error may follow a committed Task. Cleanup
+		// uses its own deadline even after the smoke context expires.
 		defer func() {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			if err := s.cleanupTask(cleanupCtx, name, root); err != nil {
+			if err := s.cleanupTask(cleanupCtx, name, root, rootClaims, created.status == http.StatusCreated); err != nil {
 				runErr = errors.Join(runErr, fmt.Errorf("test Task cleanup: %w", err))
 			}
 		}()
@@ -396,7 +397,17 @@ func (s *smokeClient) taskURL(name string) string {
 	return path + "?" + url.Values{"namespace": {s.opts.namespace}}.Encode()
 }
 
-func (s *smokeClient) cleanupTask(ctx context.Context, name, credential string) error {
+func (s *smokeClient) cleanupTask(ctx context.Context, name, credential string, claims *kontxttoken.Claims, createConfirmed bool) error {
+	if !createConfirmed {
+		resp, err := s.request(ctx, http.MethodGet, s.taskURL(name), credential, "", nil, http.StatusOK, http.StatusNotFound)
+		if err != nil || resp.status == http.StatusNotFound {
+			return err
+		}
+		// Confirm that an uncertain create belongs to this transaction before deleting it.
+		if _, err := s.checkTask(resp.body, name, claims); err != nil {
+			return fmt.Errorf("unconfirmed Task identity: %w", err)
+		}
+	}
 	resp, err := s.request(ctx, http.MethodDelete, s.taskURL(name), credential, "", nil, http.StatusNoContent, http.StatusNotFound)
 	if err != nil || resp.status == http.StatusNotFound {
 		return err
