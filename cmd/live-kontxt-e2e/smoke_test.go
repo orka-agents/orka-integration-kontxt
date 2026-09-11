@@ -60,6 +60,8 @@ func TestSmokeFailuresAndCleanup(t *testing.T) {
 		{"replacement-identity", "replacement token changed", false},
 		{"broaden-allowed", "scope broadening rejection", false},
 		{"downstream-identity", "downstream verification", false},
+		{"list-tctx-leak", "private context", false},
+		{"list-rctx-leak", "private context", false},
 		{"create-conflict", "test Task create", false},
 		{"create-disconnect", "test Task create", true},
 		{"create-disconnect-absent", "test Task create", false},
@@ -68,6 +70,12 @@ func TestSmokeFailuresAndCleanup(t *testing.T) {
 		{"create-json", "Task response is invalid JSON", true},
 		{"create-leak", "Task JSON contains a raw credential", true},
 		{"get-leak", "Task JSON contains a raw credential", true},
+		{"create-tctx-leak", "private context", true},
+		{"create-rctx-leak", "private context", true},
+		{"get-tctx-leak", "private context", true},
+		{"get-rctx-leak", "private context", true},
+		{"cleanup-tctx-leak", "private context", true},
+		{"cleanup-rctx-leak", "private context", true},
 		{"requester-identity", "requestedBy does not match", true},
 		{"transaction-identity", "transaction metadata does not match", true},
 		{"task-failed", "test Task failed", true},
@@ -153,23 +161,34 @@ func TestSmokeDoesNotForwardCredentialsOnRedirect(t *testing.T) {
 
 func TestCheckTransaction(t *testing.T) {
 	for _, tc := range []struct {
+		name    string
 		profile string
 		txn     string
+		args    []string
 		wantErr bool
 	}{
-		{"transaction-token", "test-transaction", false},
-		{"unknown-profile", "test-transaction", true},
-		{"transaction-token", "", true},
-		{"transaction-token", " \n", true},
+		{"matching", "transaction-token", "test-transaction", []string{"test-transaction"}, false},
+		{"wrong-profile", "unknown-profile", "test-transaction", []string{"test-transaction"}, true},
+		{"missing-id", "transaction-token", "", []string{"test-transaction"}, true},
+		{"blank-id", "transaction-token", " \n", []string{"test-transaction"}, true},
+		{"wrong-id", "transaction-token", "another-transaction", []string{"test-transaction"}, true},
+		{"missing-expected-id", "transaction-token", "test-transaction", nil, true},
+		{"empty-expected-id", "transaction-token", "test-transaction", []string{""}, true},
+		{"blank-expected-id", "transaction-token", "test-transaction", []string{" \n"}, true},
+		{"extra-arguments", "transaction-token", "test-transaction", []string{"test-transaction", testPrivateContext}, true},
 	} {
-		t.Setenv("ORKA_TRANSACTION_PROFILE", tc.profile)
-		t.Setenv("ORKA_TRANSACTION_ID", tc.txn)
-		if err := runCheckTransaction(nil); (err != nil) != tc.wantErr {
-			t.Fatalf("check-transaction error = %v, want error %t", err, tc.wantErr)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("ORKA_TRANSACTION_PROFILE", tc.profile)
+			t.Setenv("ORKA_TRANSACTION_ID", tc.txn)
+			if err := runCheckTransaction(tc.args); (err != nil) != tc.wantErr {
+				t.Fatalf("check-transaction error = %v, want error %t", err, tc.wantErr)
+			}
+		})
 	}
+	t.Setenv("ORKA_TRANSACTION_PROFILE", "transaction-token")
+	t.Setenv("ORKA_TRANSACTION_ID", "test-transaction")
 	if err := runCheckTransaction([]string{testPrivateContext}); err == nil || strings.Contains(err.Error(), testPrivateContext) {
-		t.Fatal("check-transaction should reject arguments without echoing them")
+		t.Fatal("check-transaction should reject a mismatched ID without echoing it")
 	}
 }
 
@@ -381,7 +400,12 @@ func newSmokeFixture(t *testing.T, fault string) *smokeFixture {
 		switch {
 		case r.Method == http.MethodGet && name == "":
 			fixture.observed["allowed-list"]++
-			_, _ = io.WriteString(w, `{"items":[]}`)
+			if fault == "list-tctx-leak" || fault == "list-rctx-leak" {
+				task := fixtureTask("previous-task", fixture.opts.namespace, claims)
+				_ = json.NewEncoder(w).Encode(map[string]any{"items": []any{fixtureTaskWithContext(task, claims, strings.Split(fault, "-")[1])}})
+			} else {
+				_, _ = io.WriteString(w, `{"items":[]}`)
+			}
 		case r.Method == http.MethodPost && name == "":
 			var req struct {
 				Name      string   `json:"name"`
@@ -394,7 +418,7 @@ func newSmokeFixture(t *testing.T, fault string) *smokeFixture {
 			decoder := json.NewDecoder(r.Body)
 			decoder.DisallowUnknownFields()
 			if decoder.Decode(&req) != nil || req.Namespace != fixture.opts.namespace || req.Type != "container" ||
-				req.Image != fixture.opts.taskImage || !slices.Equal(req.Command, []string{"/live-kontxt-e2e", "check-transaction"}) ||
+				req.Image != fixture.opts.taskImage || !slices.Equal(req.Command, []string{"/live-kontxt-e2e", "check-transaction", claims.TransactionID}) ||
 				req.Timeout != fixture.opts.timeout.String() || !strings.HasPrefix(req.Name, "kontxt-smoke-") {
 				t.Error("create request does not match Orka's public Task API")
 				w.WriteHeader(http.StatusBadRequest)
@@ -431,9 +455,15 @@ func newSmokeFixture(t *testing.T, fault string) *smokeFixture {
 				_, _ = io.WriteString(w, testPrivateContext)
 			} else if fault == "create-leak" {
 				_ = json.NewEncoder(w).Encode(map[string]any{"credential": fixture.subject})
+			} else if fault == "create-tctx-leak" || fault == "create-rctx-leak" {
+				_ = json.NewEncoder(w).Encode(fixtureTaskWithContext(fixture.task, claims, strings.Split(fault, "-")[1]))
 			} else {
 				_ = json.NewEncoder(w).Encode(fixture.task)
 			}
+		case r.Method == http.MethodGet && fixture.observed["delete"] > 0 && fixture.observed["cleanup-context"] == 0 &&
+			(fault == "cleanup-tctx-leak" || fault == "cleanup-rctx-leak"):
+			fixture.observed["cleanup-context"]++
+			_ = json.NewEncoder(w).Encode(fixtureTaskWithContext(fixture.task, claims, strings.Split(fault, "-")[1]))
 		case name != fixture.task.Metadata.Name || !fixture.exists:
 			fixture.observed["absent"]++
 			w.WriteHeader(http.StatusNotFound)
@@ -452,6 +482,8 @@ func newSmokeFixture(t *testing.T, fault string) *smokeFixture {
 			}
 			if fault == "get-leak" {
 				_ = json.NewEncoder(w).Encode(map[string]any{"credential": r.Header.Get(kontxttoken.HeaderName)})
+			} else if fault == "get-tctx-leak" || fault == "get-rctx-leak" {
+				_ = json.NewEncoder(w).Encode(fixtureTaskWithContext(fixture.task, claims, strings.Split(fault, "-")[1]))
 			} else {
 				_ = json.NewEncoder(w).Encode(fixture.task)
 			}
@@ -472,6 +504,22 @@ func newSmokeFixture(t *testing.T, fault string) *smokeFixture {
 	mux.HandleFunc("/api/v1/tasks", handleTasks)
 	mux.HandleFunc("/api/v1/tasks/", handleTasks)
 	return fixture
+}
+
+func fixtureTaskWithContext(task smokeTask, claims *kontxttoken.Claims, field string) map[string]any {
+	context := claims.TransactionContext
+	if field == "rctx" {
+		context = claims.RequesterContext
+	}
+	return map[string]any{
+		"metadata": task.Metadata,
+		"spec": map[string]any{
+			"requestedBy": task.Spec.RequestedBy,
+			"transaction": task.Spec.Transaction,
+			field:         context,
+		},
+		"status": task.Status,
+	}
 }
 
 func fixtureTask(name, namespace string, claims *kontxttoken.Claims) smokeTask {

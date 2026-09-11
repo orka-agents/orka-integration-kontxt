@@ -197,7 +197,8 @@ log 'Running projected ServiceAccount, authorization, replacement, and Task chec
 kubectl set image --local -f "${repo_root}/manifests/kontxt/smoke-job.yaml" "smoke=${helper_ref}" -o yaml |
   kubectl set env --local -f - "TASK_IMAGE=${helper_ref}" -o yaml |
   kubectl -n "${namespace}" apply -f -
-deadline=$((SECONDS + 360))
+# Allow the Job's 450s deadline and its 30s termination grace period.
+deadline=$((SECONDS + 480))
 while :; do
   job="$(kubectl -n "${namespace}" get job kontxt-smoke -o json)"
   if jq -e 'any(.status.conditions[]?; .type == "Complete" and .status == "True")' <<<"${job}" >/dev/null; then

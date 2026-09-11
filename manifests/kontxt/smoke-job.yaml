@@ -4,7 +4,8 @@ metadata:
   name: kontxt-smoke
 spec:
   backoffLimit: 0
-  activeDeadlineSeconds: 330
+  # 5m smoke + 30s Task cleanup + 2m scheduling and startup.
+  activeDeadlineSeconds: 450
   template:
     spec:
       serviceAccountName: kontxt-caller

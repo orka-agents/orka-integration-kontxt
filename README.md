@@ -76,7 +76,7 @@ The commit identifies the Orka version tested. If a check fails, the script exit
 |---|---|
 | Identity exchange | A valid Kubernetes ServiceAccount token can be exchanged for a signed Kontxt token. |
 | API permissions | Listing Tasks succeeds with the required scope. Requests without a token get `401`; missing permissions or the wrong namespace get `403`. |
-| Task execution | A container Task receives transaction metadata, finishes successfully, and is deleted. Task responses must not contain raw tokens. |
+| Task execution | A container Task confirms its transaction ID matches the issued token, finishes successfully, and is deleted. Task responses must not contain raw tokens or private request context. |
 | Reduced permissions | A replacement token can have fewer permissions while keeping the same transaction ID. Asking for broader permissions is rejected. |
 | Verification by another service | A second test service accepts the restricted token and confirms its transaction ID and scope. |
 

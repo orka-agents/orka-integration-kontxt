@@ -118,14 +118,14 @@ func (o smokeOptions) validate() error {
 }
 
 func runCheckTransaction(args []string) error {
-	if len(args) != 0 {
-		return errors.New("check-transaction accepts no arguments")
+	if len(args) != 1 || strings.TrimSpace(args[0]) == "" {
+		return errors.New("check-transaction requires the expected transaction ID")
 	}
 	if os.Getenv("ORKA_TRANSACTION_PROFILE") != "transaction-token" {
 		return errors.New("ORKA_TRANSACTION_PROFILE must be transaction-token")
 	}
-	if strings.TrimSpace(os.Getenv("ORKA_TRANSACTION_ID")) == "" {
-		return errors.New("ORKA_TRANSACTION_ID is missing")
+	if os.Getenv("ORKA_TRANSACTION_ID") != args[0] {
+		return errors.New("ORKA_TRANSACTION_ID does not match the issued transaction")
 	}
 	_, err := fmt.Fprintln(os.Stdout, "transaction metadata verified")
 	return err
@@ -154,9 +154,11 @@ func newSmokeClient(opts smokeOptions) *smokeClient {
 }
 
 func (s *smokeClient) run(ctx context.Context, subject string) (runErr error) {
-	s.secrets = append(s.secrets, subject)
-	details := map[string]any{"namespace": s.opts.namespace, "taskType": "container", "e2e": "kontxt-smoke"}
-	rctx := map[string]any{"source": "kontxt-smoke"}
+	// This synthetic value must be signed but never appear in Task responses.
+	privateContext := "kontxt-smoke-private-" + rand.Text()
+	s.secrets = append(s.secrets, subject, privateContext)
+	details := map[string]any{"namespace": s.opts.namespace, "taskType": "container", "e2e": "kontxt-smoke", "private": privateContext}
+	rctx := map[string]any{"source": "kontxt-smoke", "private": privateContext}
 	root, rootClaims, err := s.exchange(ctx, exchangeRequest{
 		subject: subject, subjectType: kontxttoken.SubjectTokenTypeAccessToken,
 		scope: smokeRootScope, details: details, requesterContext: rctx,
@@ -188,7 +190,7 @@ func (s *smokeClient) run(ctx context.Context, subject string) (runErr error) {
 	if _, err := s.request(ctx, http.MethodGet, listURL, child, "", nil, http.StatusForbidden); err != nil {
 		return fmt.Errorf("missing list scope: %w", err)
 	}
-	wrongDetails := map[string]any{"namespace": s.opts.namespace + "-denied", "taskType": "container", "e2e": "kontxt-smoke"}
+	wrongDetails := map[string]any{"namespace": s.opts.namespace + "-denied", "taskType": "container", "e2e": "kontxt-smoke", "private": privateContext}
 	wrongNamespace, wrongClaims, err := s.exchange(ctx, exchangeRequest{
 		subject: subject, subjectType: kontxttoken.SubjectTokenTypeAccessToken,
 		scope: smokeRootScope, details: wrongDetails, requesterContext: rctx,
@@ -234,7 +236,7 @@ func (s *smokeClient) run(ctx context.Context, subject string) (runErr error) {
 	name := "kontxt-smoke-" + strings.ToLower(rand.Text()[:12])
 	body, err := json.Marshal(map[string]any{
 		"name": name, "namespace": s.opts.namespace, "type": "container", "image": s.opts.taskImage,
-		"command": []string{"/live-kontxt-e2e", "check-transaction"}, "timeout": s.opts.timeout.String(),
+		"command": []string{"/live-kontxt-e2e", "check-transaction", rootClaims.TransactionID}, "timeout": s.opts.timeout.String(),
 	})
 	if err != nil {
 		return errors.New("encoding the test Task failed")
@@ -500,7 +502,7 @@ func (s *smokeClient) checkTask(body []byte, name string, claims *kontxttoken.Cl
 func (s *smokeClient) checkRedaction(body []byte) error {
 	for _, secret := range s.secrets {
 		if secret != "" && bytes.Contains(body, []byte(secret)) {
-			return errors.New("Task JSON contains a raw credential")
+			return errors.New("Task JSON contains a raw credential or private context")
 		}
 	}
 	return nil
